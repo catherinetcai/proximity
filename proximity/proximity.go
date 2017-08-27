@@ -41,13 +41,15 @@ func (d *DB) FindClosestHaversine(lat, lon decimal.Decimal) {
 }
 
 func (d *DB) FindClosestOptimized(lat, lon decimal.Decimal) {
-	distance := 10
+	distance := 10.0
 	// 1 degree of latitude is ~69 miles
 	// 1 degree of longitude ~ cos(latitude)*69
-	lon1 := lon - distance/math.Abs(math.Cos(s1.Angle(lat).Radians()*69))
-	lon2 := lon + distance/math.Abs(math.Cos(s1.Angle(lat).Radians()*69))
-	lat1 := lat - (distance / 69)
-	lat2 := lat + (distance / 69)
+	latFloat, _ := lat.Float64()
+	lonFloat, _ := lon.Float64()
+	lon1 := lonFloat - distance/math.Abs(math.Cos(s1.Angle(latFloat).Radians()*69))
+	lon2 := lonFloat + distance/math.Abs(math.Cos(s1.Angle(latFloat).Radians()*69))
+	lat1 := latFloat - (distance / 69)
+	lat2 := latFloat + (distance / 69)
 	query := fmt.Sprintf(`
 		SELECT *, 3956 * 2 * ASIN(SQRT(
 			POWER(SIN((%v - locations.latitude) * pi()/180/2), 2) +
@@ -60,4 +62,13 @@ func (d *DB) FindClosestOptimized(lat, lon decimal.Decimal) {
 		between %v and %v
 		ORDER BY distance limit 20;
 	`, lat, lat, lon, lon1, lon2, lat1, lat2)
+	rows, err := d.Queryx(query)
+	if err != nil {
+		panic(err)
+	}
+	for rows.Next() {
+		var l Location
+		err = rows.StructScan(&l)
+		spew.Dump(l)
+	}
 }
