@@ -2,8 +2,10 @@ package proximity
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/golang/geo/s1"
 	"github.com/shopspring/decimal"
 )
 
@@ -27,6 +29,39 @@ func (d *DB) FindClosestHaversine(lat, lon decimal.Decimal) {
 		ORDER BY distance limit 20;
 	`, lat, lat, lon, distance)
 	spew.Dump(query)
+	rows, err := d.Queryx(query)
+	if err != nil {
+		panic(err)
+	}
+	for rows.Next() {
+		var l Location
+		err = rows.StructScan(&l)
+		spew.Dump(l)
+	}
+}
+
+func (d *DB) FindClosestOptimized(lat, lon decimal.Decimal) {
+	distance := 10.0
+	// 1 degree of latitude is ~69 miles
+	// 1 degree of longitude ~ cos(latitude)*69
+	latFloat, _ := lat.Float64()
+	lonFloat, _ := lon.Float64()
+	lon1 := lonFloat - distance/math.Abs(math.Cos(s1.Angle(latFloat).Radians()*69))
+	lon2 := lonFloat + distance/math.Abs(math.Cos(s1.Angle(latFloat).Radians()*69))
+	lat1 := latFloat - (distance / 69)
+	lat2 := latFloat + (distance / 69)
+	query := fmt.Sprintf(`
+		SELECT *, 3956 * 2 * ASIN(SQRT(
+			POWER(SIN((%v - locations.latitude) * pi()/180/2), 2) +
+			COS(%v * pi()/180) * COS(locations.latitude * pi()/180) *
+			POWER(SIN((%v - locations.longitude) * pi()/180/2), 2))) as distance
+		FROM locations
+		WHERE locations.longitude 
+		between %v and %v
+		and locations.latitude
+		between %v and %v
+		ORDER BY distance limit 20;
+	`, lat, lat, lon, lon1, lon2, lat1, lat2)
 	rows, err := d.Queryx(query)
 	if err != nil {
 		panic(err)
