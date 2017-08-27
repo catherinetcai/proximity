@@ -15,7 +15,7 @@ type Location struct {
 }
 
 func (d *DB) FindClosestHaversine(lat, lon decimal.Decimal) {
-	distance := 500
+	distance := 10
 	query := fmt.Sprintf(`
 		SELECT *, 3956 * 2 * ASIN(SQRT(
 			POWER(SIN((%v - abs(locations.latitude)) * pi()/180/2), 2) +
